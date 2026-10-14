@@ -107,3 +107,43 @@ and 40 tickets across every status, priority and SLA state.
 | Browser warns about the certificate | `dotnet dev-certs https --trust`, or use the web app, which proxies |
 | Web app shows "Unable to load tickets" | The API is not running, or `VITE_API_PROXY_TARGET` points at the wrong port |
 | SQL Server slow on Apple Silicon | Enable Rosetta in Docker Desktop → Settings → General |
+
+
+
+## Candidate work – Task 1
+
+### 1.1 DEFECT-117 – Filters sometimes do not take effect
+
+**Root cause**  
+The `useEffect` inside `useTicketList` only listed `filters.search`, `filters.page` and `filters.pageSize` in its dependency array. Changing any other filter (status, priority, category, etc.) updated React state but never re-triggered the API call. The request only happened later when the search box changed, carrying the previously selected filters with it.
+
+**Fix**  
+All filter fields that should cause a request were added to the dependency array while keeping the existing 300 ms debounce for the search input.
+
+**Verification**  
+- Changing Status / Priority / Category etc. now immediately sends a `GET /api/tickets` request.  
+- Search is still debounced (no request on every keystroke).  
+- Regression test: `useTicketList.test.ts` → “sends a request when status changes (DEFECT-117 regression)”.
+
+### 1.2 Server-side filtering
+
+All list filters are now applied in the database **before** counting and paging.
+
+| Filter            | Implementation                                      |
+|-------------------|-----------------------------------------------------|
+| status, priority, categoryId, customerId, assignedAgentId | Exact match (`==`) |
+| unassignedOnly    | `AssignedAgentId == null`                           |
+| search            | Title OR Reference OR Customer name (trimmed)       |
+
+All supplied filters are combined with **AND**.  
+Adding a future filter (e.g. `slaStatus` in Task 2) only requires one additional `.Where` clause.
+
+**Tests** (in `TicketQueriesTests.cs`)  
+- Exact-match priority  
+- Combination of filters (priority + customer)  
+- Search by customer name  
+
+**How the SQL was checked**  
+Filters are applied on an `IQueryable` before `CountAsync` / `Skip` / `Take`, so Entity Framework generates a single SQL query that already contains the `WHERE` clauses.
+
+
