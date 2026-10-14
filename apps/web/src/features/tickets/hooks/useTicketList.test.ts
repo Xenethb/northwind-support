@@ -51,4 +51,33 @@ describe('useTicketList', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data?.items).toHaveLength(1);
   });
+
+    it('sends a request when status changes (DEFECT-117 regression)', async () => {
+    const { result } = renderHook(() => useTicketList());
+
+    // Initial load
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(getTickets).toHaveBeenCalledTimes(1);
+
+    // Change status only
+    act(() => {
+      result.current.updateFilters({ status: 'InProgress' });
+    });
+
+    // Should trigger a new request after debounce
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
+
+    expect(getTickets).toHaveBeenCalledTimes(2);
+    expect(getTickets).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'InProgress', page: 1 }),
+    );
+  });
+
+
+
+
 });
