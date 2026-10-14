@@ -23,12 +23,9 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQu
     /// </remarks>
     public async Task<PagedResult<TicketListItemDto>> GetPagedAsync(TicketQuery query, CancellationToken ct)
     {
-        var tickets = TicketsWithLabels();
-
-        var totalCount = await tickets.CountAsync(ct);
-
+        var tickets = ApplyFilters(TicketsWithLabels(), query);   // ← filters applied first
+        var totalCount = await tickets.CountAsync(ct);            // ← count is now of filtered set
         var now = clock.UtcNow;
-
         var items = await ApplySort(tickets, query)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
@@ -116,6 +113,47 @@ public sealed class TicketQueries(SupportDbContext db, IClock clock) : ITicketQu
         join category in db.Set<Category>() on ticket.CategoryId equals category.Id
         from agent in db.Set<Agent>().Where(a => a.Id == ticket.AssignedAgentId).DefaultIfEmpty()
         select new TicketWithLabels { Ticket = ticket, Customer = customer, Category = category, Agent = agent };
+
+
+        /// <summary>
+        /// Applies all TicketQuery filters in the database using AND logic.
+        /// Filtering happens before counting and paging (FL-5).
+        /// </summary>
+        private static IQueryable<TicketWithLabels> ApplyFilters(
+        IQueryable<TicketWithLabels> source,
+        TicketQuery query)
+        {
+        if (query.Status.HasValue)
+        source = source.Where(x => x.Ticket.Status == query.Status.Value);
+
+        if (query.Priority.HasValue)
+            source = source.Where(x => x.Ticket.Priority == query.Priority.Value);
+
+        if (query.CategoryId.HasValue)
+            source = source.Where(x => x.Ticket.CategoryId == query.CategoryId.Value);
+
+        if (query.CustomerId.HasValue)
+            source = source.Where(x => x.Ticket.CustomerId == query.CustomerId.Value);
+
+        if (query.AssignedAgentId.HasValue)
+            source = source.Where(x => x.Ticket.AssignedAgentId == query.AssignedAgentId.Value);
+
+        if (query.UnassignedOnly)
+            source = source.Where(x => x.Ticket.AssignedAgentId == null);
+
+        var search = query.Search?.Trim();
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            source = source.Where(x =>
+                x.Ticket.Title.Contains(search) ||
+                x.Ticket.Reference.Contains(search) ||
+                x.Customer.Name.Contains(search));
+        }
+
+        return source;
+
+        }
 
     private static IQueryable<TicketWithLabels> ApplySort(IQueryable<TicketWithLabels> source, TicketQuery query)
     {
