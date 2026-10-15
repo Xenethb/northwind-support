@@ -11,6 +11,9 @@ using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
 using SupportDesk.Presentation.Middleware;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using SupportDesk.Infrastructure.Data;
+using SupportDesk.Presentation.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -100,6 +103,12 @@ builder.Services.AddAuthorization();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// Register database connectivity health check.
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("sqlserver");
+
+
 var app = builder.Build();
 
 // Exception handling
@@ -121,8 +130,10 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-app.Run();
+// Public health endpoint; no JWT required.
+app.MapHealthChecks("/health").AllowAnonymous();
 
+app.Run();
 
 
 

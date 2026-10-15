@@ -1,0 +1,30 @@
+
+# Git and editor files
+.git
+.vscode
+.idea
+
+# .NET build outputs
+**/bin
+**/obj
+**/TestResults
+**/coverage
+
+# Node.js and React frontend
+apps/web/
+**/node_modules
+**/dist
+**/.vite
+
+# Local environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Local development overrides
+**/appsettings.Development.local.json
+
+# Miscellaneous
+*.user
+*.suo
+*.log
