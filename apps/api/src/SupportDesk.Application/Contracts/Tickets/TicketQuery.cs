@@ -6,8 +6,8 @@ namespace SupportDesk.Application.Contracts.Tickets;
 /// Filters, sorting and paging for the ticket list. Bound directly from the query string.
 /// </summary>
 /// <remarks>
-/// The web app already sends every filter below, but the API only sorts and pages so far: the
-/// filters are part of the contract and still have to be applied server-side.
+/// The web app already sends every filter below, but the API only sorts and pages so far:
+/// the filters are part of the contract and still have to be applied server-side.
 /// </remarks>
 public sealed record TicketQuery
 {
@@ -17,7 +17,9 @@ public sealed record TicketQuery
 
     public int PageSize { get; init; } = 20;
 
-    /// <summary>Matches the ticket title, its reference, or the customer name.</summary>
+    /// <summary>
+    /// Matches the ticket title, its reference, or the customer name.
+    /// </summary>
     public string? Search { get; init; }
 
     public TicketStatus? Status { get; init; }
@@ -32,13 +34,25 @@ public sealed record TicketQuery
 
     public bool UnassignedOnly { get; init; }
 
-    /// <summary>createdAtUtc | updatedAtUtc | dueAtUtc | priority | status.</summary>
+    /// <summary>
+    /// Derived SLA status filter. Filtering must be applied server-side.
+    /// Values: NotApplicable, WithinSla, AtRisk, Breached, Met.
+    /// </summary>
+    public SlaStatus? SlaStatus { get; init; }
+
+    /// <summary>
+    /// createdAtUtc | updatedAtUtc | dueAtUtc | priority | status.
+    /// </summary>
     public string SortBy { get; init; } = "createdAtUtc";
 
-    /// <summary>asc | desc.</summary>
+    /// <summary>
+    /// asc | desc.
+    /// </summary>
     public string SortDirection { get; init; } = "desc";
 
-    /// <summary>Page and page size clamped to something a database can serve.</summary>
+    /// <summary>
+    /// Normalizes the page and page size to valid database query limits.
+    /// </summary>
     public TicketQuery Normalized() => this with
     {
         Page = Page < 1 ? 1 : Page,
