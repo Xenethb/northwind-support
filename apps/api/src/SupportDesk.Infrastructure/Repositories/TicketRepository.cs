@@ -14,6 +14,11 @@ public sealed class TicketRepository(SupportDbContext db) : ITicketRepository
     public Task<Ticket?> GetByIdAsync(int id, CancellationToken ct) =>
         db.Set<Ticket>().FirstOrDefaultAsync(t => t.Id == id, ct);
 
+    public Task<Ticket?> GetByIdWithEscalationsAsync(int id, CancellationToken ct) =>
+        db.Set<Ticket>()
+            .Include(t => t.Escalations)
+            .FirstOrDefaultAsync(t => t.Id == id, ct);
+
     public async Task<string> NextReferenceAsync(CancellationToken ct)
     {
         // Single-instance application: the highest id so far is good enough. A database

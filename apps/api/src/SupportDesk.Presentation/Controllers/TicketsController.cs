@@ -3,8 +3,10 @@ using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
 using SupportDesk.Application.Features.Tickets.Commands.ChangeTicketStatus;
+using SupportDesk.Application.Features.Tickets.Commands.EscalateTicket;
 using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
+using SupportDesk.Application.Features.Tickets.Queries.GetTicketEscalations;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 
 namespace SupportDesk.Presentation.Controllers;
@@ -14,7 +16,9 @@ namespace SupportDesk.Presentation.Controllers;
 [Produces("application/json")]
 public sealed class TicketsController : ControllerBase
 {
-    /// <summary>Searches tickets with filters, sorting and paging.</summary>
+    /// <summary>
+    /// Searches tickets with filters, sorting and paging.
+    /// </summary>
     [HttpGet]
     public Task<PagedResult<TicketListItemDto>> Search(
         [FromQuery] TicketQuery query,
@@ -22,24 +26,36 @@ public sealed class TicketsController : ControllerBase
         CancellationToken ct) =>
         handler.HandleAsync(query, ct);
 
-    /// <summary>Returns one ticket.</summary>
+    /// <summary>
+    /// Returns one ticket.
+    /// </summary>
     [HttpGet("{id:int}")]
-    public Task<TicketDetailDto> Get(int id, [FromServices] GetTicketQueryHandler handler, CancellationToken ct) =>
+    public Task<TicketDetailDto> Get(
+        int id,
+        [FromServices] GetTicketQueryHandler handler,
+        CancellationToken ct) =>
         handler.HandleAsync(id, ct);
 
-    /// <summary>Raises a new ticket.</summary>
+    /// <summary>
+    /// Raises a new ticket and applies automatic triage.
+    /// </summary>
     [HttpPost]
-    public async Task<ActionResult<TicketDetailDto>> Create(
+    public async Task<ActionResult<CreateTicketResponse>> Create(
         CreateTicketRequest request,
         [FromServices] RaiseTicketCommandHandler handler,
         CancellationToken ct)
     {
-        var created = await handler.HandleAsync(request, ct);
+        var result = await handler.HandleAsync(request, ct);
 
-        return CreatedAtAction(nameof(Get), new { id = created.Id }, created);
+        return CreatedAtAction(
+            nameof(Get),
+            new { id = result.Ticket.Id },
+            result);
     }
 
-    /// <summary>Moves a ticket to another status.</summary>
+    /// <summary>
+    /// Moves a ticket to another status.
+    /// </summary>
     [HttpPatch("{id:int}/status")]
     public Task<TicketDetailDto> UpdateStatus(
         int id,
@@ -48,7 +64,9 @@ public sealed class TicketsController : ControllerBase
         CancellationToken ct) =>
         handler.HandleAsync(id, request, ct);
 
-    /// <summary>Assigns the ticket to an agent, or unassigns it when no agent is given.</summary>
+    /// <summary>
+    /// Assigns the ticket to an agent, or unassigns it when no agent is given.
+    /// </summary>
     [HttpPatch("{id:int}/assignment")]
     public Task<TicketDetailDto> Assign(
         int id,
@@ -56,4 +74,32 @@ public sealed class TicketsController : ControllerBase
         [FromServices] AssignTicketCommandHandler handler,
         CancellationToken ct) =>
         handler.HandleAsync(id, request, ct);
+
+    /// <summary>
+    /// Escalates a ticket, raises its priority, recalculates its SLA,
+    /// and may reassign it.
+    /// </summary>
+    [HttpPost("{id:int}/escalate")]
+    public async Task<ActionResult<TicketDetailDto>> Escalate(
+        int id,
+        EscalateTicketRequest request,
+        [FromServices] EscalateTicketCommandHandler handler,
+        CancellationToken ct)
+    {
+        var updated = await handler.HandleAsync(id, request, ct);
+        return Ok(updated);
+    }
+
+    /// <summary>
+    /// Returns the escalation history for a ticket, newest first.
+    /// </summary>
+    [HttpGet("{id:int}/escalations")]
+    public async Task<ActionResult<IReadOnlyList<TicketEscalationDto>>> GetEscalations(
+        int id,
+        [FromServices] GetTicketEscalationsQueryHandler handler,
+        CancellationToken ct)
+    {
+        var history = await handler.HandleAsync(id, ct);
+        return Ok(history);
+    }
 }

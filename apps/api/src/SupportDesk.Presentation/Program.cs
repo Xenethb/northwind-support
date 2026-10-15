@@ -1,5 +1,8 @@
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
 using SupportDesk.Application;
+using SupportDesk.Application.Configuration;
+using SupportDesk.Application.Features.Tickets.Triage;
 using SupportDesk.Infrastructure;
 using SupportDesk.Presentation.Extensions;
 using SupportDesk.Presentation.Filters;
@@ -27,6 +30,17 @@ builder.Services.AddCors(options => options.AddPolicy(
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Bind the existing "Sla" section.
+builder.Services.Configure<SlaOptions>(
+    builder.Configuration.GetSection(SlaOptions.SectionName));
+
+// Register the triage service using the configured SLA options.
+builder.Services.AddScoped<TicketTriageService>(sp =>
+{
+    var options = sp.GetRequiredService<IOptions<SlaOptions>>().Value;
+    return new TicketTriageService(options);
+});
+
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -44,7 +58,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors(FrontendCorsPolicy);
-
 app.MapControllers();
 
 app.Run();

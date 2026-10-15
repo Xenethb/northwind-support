@@ -18,6 +18,21 @@ public sealed class Ticket : AggregateRoot
         // For EF Core.
     }
 
+    // Escalation history for this ticket.
+    private readonly List<TicketEscalation> _escalations = new();
+
+    public IReadOnlyCollection<TicketEscalation> Escalations =>
+        _escalations.AsReadOnly();
+
+    /// <summary>
+    /// Records an escalation in this ticket's history.
+    /// </summary>
+    public void RecordEscalation(TicketEscalation escalation)
+    {
+        ArgumentNullException.ThrowIfNull(escalation);
+        _escalations.Add(escalation);
+    }
+
     /// <summary>Human-friendly identifier shown to customers, e.g. TCK-0042.</summary>
     public string Reference { get; private set; } = string.Empty;
 
@@ -49,8 +64,7 @@ public sealed class Ticket : AggregateRoot
     public bool IsOpen => Status is not (TicketStatus.Resolved or TicketStatus.Closed);
 
     /// <summary>
-    /// Raises a new ticket for a customer. It starts as <see cref="TicketStatus.New"/>, with no
-    /// owner and no due date.
+    /// Raises a new ticket for a customer. It starts as New, with no owner and no due date.
     /// </summary>
     public static Ticket Raise(
         string reference,
@@ -82,7 +96,6 @@ public sealed class Ticket : AggregateRoot
     /// <summary>
     /// Moves the ticket through its lifecycle, keeping the resolution timestamp in step.
     /// </summary>
-    /// <exception cref="BusinessRuleViolationException">The ticket is closed.</exception>
     public void ChangeStatus(TicketStatus status, DateTime nowUtc)
     {
         if (Status == TicketStatus.Closed && status != TicketStatus.Closed)
@@ -103,12 +116,64 @@ public sealed class Ticket : AggregateRoot
     }
 
     /// <summary>
-    /// Hands the ticket to an agent, or takes it back off them when <paramref name="agentId"/>
-    /// is null. Whether the agent may take it is checked by the caller, which can see agents.
+    /// Hands the ticket to an agent, or takes it back off them when agentId is null.
+    /// Whether the agent may take it is checked by the caller.
     /// </summary>
     public void AssignTo(int? agentId, DateTime nowUtc)
     {
         AssignedAgentId = agentId;
         UpdatedAtUtc = nowUtc;
     }
+
+    /// <summary>
+    /// Records the SLA due date decided by triage (or after escalation).
+    /// Only the application layer should call this after applying the business rules.
+    /// </summary>
+    public void SetDueAt(DateTime? dueAtUtc, DateTime nowUtc)
+    {
+        DueAtUtc = dueAtUtc;
+        UpdatedAtUtc = nowUtc;
+    }
+
+    /// <summary>
+    /// Raises the priority one level and sets the new due date.
+    /// The caller is responsible for eligibility checks and escalation history.
+    /// </summary>
+    public void Escalate(
+        TicketPriority newPriority,
+        DateTime? newDueAtUtc,
+        DateTime nowUtc)
+    {
+        if (Priority == TicketPriority.Critical)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is already Critical and cannot be escalated.");
+        }
+
+        if (Status is TicketStatus.Resolved or TicketStatus.Closed)
+        {
+            throw new BusinessRuleViolationException(
+                $"Ticket {Reference} is {Status} and cannot be escalated.");
+        }
+
+        Priority = newPriority;
+        DueAtUtc = newDueAtUtc;
+        UpdatedAtUtc = nowUtc;
+    }
+}
+
+/// <summary>
+/// Provides helper methods for moving a ticket's priority to the next level.
+/// </summary>
+public static class TicketPriorityExtensions
+{
+    public static TicketPriority RaiseOneLevel(this TicketPriority current) =>
+        current switch
+        {
+            TicketPriority.Low => TicketPriority.Medium,
+            TicketPriority.Medium => TicketPriority.High,
+            TicketPriority.High => TicketPriority.Critical,
+            TicketPriority.Critical => TicketPriority.Critical,
+            _ => current
+        };
 }
