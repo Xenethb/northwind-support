@@ -14,7 +14,11 @@ public sealed class Agent : AggregateRoot
         // For EF Core.
     }
 
-    public Agent(string fullName, string email, int maxOpenTickets, DateTime createdAtUtc)
+    public Agent(
+        string fullName,
+        string email,
+        int maxOpenTickets,
+        DateTime createdAtUtc)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fullName);
         ArgumentException.ThrowIfNullOrWhiteSpace(email);
@@ -31,18 +35,42 @@ public sealed class Agent : AggregateRoot
 
     public string Email { get; private set; } = string.Empty;
 
-    /// <summary>Inactive agents keep their history but take no new work.</summary>
+    /// <summary>
+    /// The securely hashed password used to authenticate this agent.
+    /// </summary>
+    public string? PasswordHash { get; private set; }
+
+    /// <summary>
+    /// Inactive agents keep their history but take no new work.
+    /// </summary>
     public bool IsActive { get; private set; }
 
-    /// <summary>How many open tickets this agent is willing to hold at once.</summary>
+    /// <summary>
+    /// How many open tickets this agent is willing to hold at once.
+    /// </summary>
     public int MaxOpenTickets { get; private set; }
 
     public DateTime CreatedAtUtc { get; private set; }
 
-    /// <summary>The ticket categories this agent is qualified for.</summary>
-    public IReadOnlyCollection<AgentSpecialization> Specializations => _specializations;
+    /// <summary>
+    /// The ticket categories this agent is qualified for.
+    /// </summary>
+    public IReadOnlyCollection<AgentSpecialization> Specializations =>
+        _specializations;
 
-    /// <summary>Records that the agent is qualified for a category. Adding one twice is a no-op.</summary>
+    /// <summary>
+    /// Sets the password hash. Called only at seed time or when a password is changed.
+    /// </summary>
+    public void SetPasswordHash(string passwordHash)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(passwordHash);
+        PasswordHash = passwordHash;
+    }
+
+    /// <summary>
+    /// Records that the agent is qualified for a category.
+    /// Adding one twice is a no-op.
+    /// </summary>
     public void AddSpecialization(int categoryId)
     {
         if (_specializations.Any(s => s.CategoryId == categoryId))
@@ -53,6 +81,8 @@ public sealed class Agent : AggregateRoot
         _specializations.Add(new AgentSpecialization(categoryId));
     }
 
-    /// <summary>Stops the agent from taking new work. Their history is kept.</summary>
+    /// <summary>
+    /// Stops the agent from taking new work. Their history is kept.
+    /// </summary>
     public void Deactivate() => IsActive = false;
 }

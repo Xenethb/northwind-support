@@ -1,3 +1,4 @@
+
 using SupportDesk.Domain.Aggregates.Tickets;
 using SupportDesk.UnitTests.TestDoubles;
 
@@ -7,23 +8,79 @@ public class SlaEvaluatorTests
 {
     private static readonly DateTime Now = FixedClock.DefaultNow;
 
-    [Fact]
-    public void Evaluate_WithoutADueDate_IsNotApplicable() =>
-        Assert.Equal(SlaStatus.NotApplicable, SlaEvaluator.Evaluate(null, null, Now));
+    private static readonly DateTime CreatedAt =
+        Now.AddHours(-1);
 
     [Fact]
-    public void Evaluate_ResolvedOnTime_IsMet() =>
-        Assert.Equal(SlaStatus.Met, SlaEvaluator.Evaluate(Now, Now, Now.AddDays(1)));
+    public void Evaluate_WithoutADueDate_IsNotApplicable()
+    {
+        var result = SlaEvaluator.Evaluate(
+            null,
+            null,
+            CreatedAt,
+            Now);
+
+        Assert.Equal(SlaStatus.NotApplicable, result);
+    }
 
     [Fact]
-    public void Evaluate_ResolvedLate_IsBreached() =>
-        Assert.Equal(SlaStatus.Breached, SlaEvaluator.Evaluate(Now, Now.AddMinutes(1), Now));
+    public void Evaluate_ResolvedOnTime_IsMet()
+    {
+        var result = SlaEvaluator.Evaluate(
+            Now.AddDays(1),
+            Now,
+            CreatedAt,
+            Now);
+
+        Assert.Equal(SlaStatus.Met, result);
+    }
 
     [Fact]
-    public void Evaluate_OpenAndPastDue_IsBreached() =>
-        Assert.Equal(SlaStatus.Breached, SlaEvaluator.Evaluate(Now.AddMinutes(-1), null, Now));
+    public void Evaluate_ResolvedLate_IsBreached()
+    {
+        var result = SlaEvaluator.Evaluate(
+            Now,
+            Now.AddMinutes(1),
+            CreatedAt,
+            Now);
+
+        Assert.Equal(SlaStatus.Breached, result);
+    }
 
     [Fact]
-    public void Evaluate_OpenAndBeforeDue_IsWithinSla() =>
-        Assert.Equal(SlaStatus.WithinSla, SlaEvaluator.Evaluate(Now.AddHours(1), null, Now));
+    public void Evaluate_OpenAndPastDue_IsBreached()
+    {
+        var result = SlaEvaluator.Evaluate(
+            Now.AddMinutes(-1),
+            null,
+            CreatedAt,
+            Now);
+
+        Assert.Equal(SlaStatus.Breached, result);
+    }
+
+    [Fact]
+    public void Evaluate_OpenAndBeforeDue_IsWithinSla()
+    {
+        var result = SlaEvaluator.Evaluate(
+            Now.AddHours(1),
+            null,
+            CreatedAt,
+            Now);
+
+        Assert.Equal(SlaStatus.WithinSla, result);
+    }
+
+    [Fact]
+    public void Evaluate_OpenAndNearDue_IsAtRisk()
+    {
+        var result = SlaEvaluator.Evaluate(
+            Now.AddMinutes(10),
+            null,
+            Now.AddMinutes(-90),
+            Now,
+            25);
+
+        Assert.Equal(SlaStatus.AtRisk, result);
+    }
 }

@@ -44,3 +44,11 @@ secrets.json
 ## OS
 .DS_Store
 Thumbs.db
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Local configuration overrides
+**/appsettings.Development.local.json

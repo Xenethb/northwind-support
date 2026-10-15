@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 using SupportDesk.Application.Contracts.Common;
 using SupportDesk.Application.Contracts.Tickets;
 using SupportDesk.Application.Features.Tickets.Commands.AssignTicket;
@@ -12,94 +14,108 @@ using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 namespace SupportDesk.Presentation.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/tickets")]
 [Produces("application/json")]
 public sealed class TicketsController : ControllerBase
 {
-    /// <summary>
-    /// Searches tickets with filters, sorting and paging.
-    /// </summary>
-    [HttpGet]
-    public Task<PagedResult<TicketListItemDto>> Search(
-        [FromQuery] TicketQuery query,
-        [FromServices] SearchTicketsQueryHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(query, ct);
+/// <summary>
+/// Searches tickets with filters, sorting and paging.
+/// </summary>
+[HttpGet]
+public Task<PagedResult<TicketListItemDto>> Search(
+[FromQuery] TicketQuery query,
+[FromServices] SearchTicketsQueryHandler handler,
+CancellationToken ct) =>
+handler.HandleAsync(query, ct);
 
-    /// <summary>
-    /// Returns one ticket.
-    /// </summary>
-    [HttpGet("{id:int}")]
-    public Task<TicketDetailDto> Get(
-        int id,
-        [FromServices] GetTicketQueryHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(id, ct);
+/// <summary>
+/// Returns one ticket.
+/// </summary>
+[HttpGet("{id:int}")]
+public Task<TicketDetailDto> Get(
+    int id,
+    [FromServices] GetTicketQueryHandler handler,
+    CancellationToken ct) =>
+    handler.HandleAsync(id, ct);
 
-    /// <summary>
-    /// Raises a new ticket and applies automatic triage.
-    /// </summary>
-    [HttpPost]
-    public async Task<ActionResult<CreateTicketResponse>> Create(
-        CreateTicketRequest request,
-        [FromServices] RaiseTicketCommandHandler handler,
-        CancellationToken ct)
+/// <summary>
+/// Raises a new ticket and applies automatic triage.
+/// </summary>
+[HttpPost]
+public async Task<ActionResult<CreateTicketResponse>> Create(
+    CreateTicketRequest request,
+    [FromServices] RaiseTicketCommandHandler handler,
+    CancellationToken ct)
+{
+    var result = await handler.HandleAsync(request, ct);
+
+    return CreatedAtAction(
+        nameof(Get),
+        new { id = result.Ticket.Id },
+        result);
+}
+
+/// <summary>
+/// Moves a ticket to another status.
+/// </summary>
+[HttpPatch("{id:int}/status")]
+public Task<TicketDetailDto> UpdateStatus(
+    int id,
+    UpdateTicketStatusRequest request,
+    [FromServices] ChangeTicketStatusCommandHandler handler,
+    CancellationToken ct) =>
+    handler.HandleAsync(id, request, ct);
+
+/// <summary>
+/// Assigns the ticket to an agent, or unassigns it when no agent is given.
+/// </summary>
+[HttpPatch("{id:int}/assignment")]
+public Task<TicketDetailDto> Assign(
+    int id,
+    AssignTicketRequest request,
+    [FromServices] AssignTicketCommandHandler handler,
+    CancellationToken ct) =>
+    handler.HandleAsync(id, request, ct);
+
+/// <summary>
+/// Escalates a ticket, raises its priority, recalculates its SLA,
+/// and may reassign it.
+/// </summary>
+[HttpPost("{id:int}/escalate")]
+public async Task<ActionResult<TicketDetailDto>> Escalate(
+    int id,
+    EscalateTicketRequest request,
+    [FromServices] EscalateTicketCommandHandler handler,
+    CancellationToken ct)
+{
+    // Get the authenticated agent's identity from the JWT.
+    var agentName = User.FindFirstValue(ClaimTypes.Name);
+
+    if (string.IsNullOrWhiteSpace(agentName))
     {
-        var result = await handler.HandleAsync(request, ct);
-
-        return CreatedAtAction(
-            nameof(Get),
-            new { id = result.Ticket.Id },
-            result);
+        return Unauthorized();
     }
 
-    /// <summary>
-    /// Moves a ticket to another status.
-    /// </summary>
-    [HttpPatch("{id:int}/status")]
-    public Task<TicketDetailDto> UpdateStatus(
-        int id,
-        UpdateTicketStatusRequest request,
-        [FromServices] ChangeTicketStatusCommandHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(id, request, ct);
+    // Never trust the caller's supplied identity.
+    request.EscalatedBy = agentName;
 
-    /// <summary>
-    /// Assigns the ticket to an agent, or unassigns it when no agent is given.
-    /// </summary>
-    [HttpPatch("{id:int}/assignment")]
-    public Task<TicketDetailDto> Assign(
-        int id,
-        AssignTicketRequest request,
-        [FromServices] AssignTicketCommandHandler handler,
-        CancellationToken ct) =>
-        handler.HandleAsync(id, request, ct);
+    var updated = await handler.HandleAsync(id, request, ct);
 
-    /// <summary>
-    /// Escalates a ticket, raises its priority, recalculates its SLA,
-    /// and may reassign it.
-    /// </summary>
-    [HttpPost("{id:int}/escalate")]
-    public async Task<ActionResult<TicketDetailDto>> Escalate(
-        int id,
-        EscalateTicketRequest request,
-        [FromServices] EscalateTicketCommandHandler handler,
-        CancellationToken ct)
-    {
-        var updated = await handler.HandleAsync(id, request, ct);
-        return Ok(updated);
-    }
+    return Ok(updated);
+}
 
-    /// <summary>
-    /// Returns the escalation history for a ticket, newest first.
-    /// </summary>
-    [HttpGet("{id:int}/escalations")]
-    public async Task<ActionResult<IReadOnlyList<TicketEscalationDto>>> GetEscalations(
-        int id,
-        [FromServices] GetTicketEscalationsQueryHandler handler,
-        CancellationToken ct)
-    {
-        var history = await handler.HandleAsync(id, ct);
-        return Ok(history);
-    }
+/// <summary>
+/// Returns the escalation history for a ticket, newest first.
+/// </summary>
+[HttpGet("{id:int}/escalations")]
+public async Task<ActionResult<IReadOnlyList<TicketEscalationDto>>> GetEscalations(
+    int id,
+    [FromServices] GetTicketEscalationsQueryHandler handler,
+    CancellationToken ct)
+{
+    var history = await handler.HandleAsync(id, ct);
+    return Ok(history);
+}
+
 }

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SupportDesk.Application.Abstractions;
@@ -17,16 +18,24 @@ namespace SupportDesk.Infrastructure.Data;
 /// Every aggregate is built through its own behaviour. The two historical values no behaviour
 /// produces - a ticket's last update and its due date - are set through EF Core directly.
 /// </remarks>
-public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<SupportDbSeeder> logger)
+public sealed class SupportDbSeeder(
+    SupportDbContext db,
+    IClock clock,
+    ILogger<SupportDbSeeder> logger)
 {
     /// <summary>Seeds the database, unless it already has tickets in it.</summary>
+    
     public async Task SeedAsync(CancellationToken ct = default)
     {
+        // Initialize missing passwords for existing development agents.
+        await SeedMissingAgentPasswordsAsync(ct);
+
         if (await db.Set<Ticket>().AnyAsync(ct))
         {
             logger.LogInformation("Seed data already present; skipping.");
             return;
         }
+
 
         var now = clock.UtcNow;
 
@@ -47,8 +56,44 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
 
         logger.LogInformation(
             "Seeded {Categories} categories, {Customers} customers, {Agents} agents and {Tickets} tickets.",
-            categories.Count, customers.Count, agents.Count, await db.Set<Ticket>().CountAsync(ct));
+            categories.Count,
+            customers.Count,
+            agents.Count,
+            await db.Set<Ticket>().CountAsync(ct));
     }
+
+
+    private async Task SeedMissingAgentPasswordsAsync(
+    CancellationToken ct)
+    {
+        const string DevPassword = "DevPassword123!";
+
+        var agentsWithoutPasswords = await db.Set<Agent>()
+            .Where(a => a.PasswordHash == null ||
+                        a.PasswordHash == "")
+            .ToListAsync(ct);
+
+        if (agentsWithoutPasswords.Count == 0)
+        {
+            return;
+        }
+
+        var hasher = new PasswordHasher<Agent>();
+
+        foreach (var agent in agentsWithoutPasswords)
+        {
+            var hash = hasher.HashPassword(agent, DevPassword);
+            agent.SetPasswordHash(hash);
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        logger.LogInformation(
+            "Initialized development passwords for {Count} existing agents.",
+            agentsWithoutPasswords.Count);
+    }
+
+
 
     private static List<Category> SeedCategories() =>
     [
@@ -71,16 +116,70 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
 
     private static List<Agent> SeedAgents(DateTime now)
     {
-        var yuki = new Agent("Yuki Tanaka", "yuki.tanaka@northwind-support.example", 8, now.AddDays(-600));
+        // Development-only password. Documented in the README.
+        // Never use this password in production.
+        const string DevPassword = "DevPassword123!";
+
+        var hasher = new PasswordHasher<Agent>();
+
+        Agent Create(
+            string fullName,
+            string email,
+            int maxOpenTickets,
+            DateTime createdAtUtc)
+        {
+            var agent = new Agent(
+                fullName,
+                email,
+                maxOpenTickets,
+                createdAtUtc);
+
+            agent.SetPasswordHash(
+                hasher.HashPassword(agent, DevPassword));
+
+            return agent;
+        }
+
+        var yuki = Create(
+            "Yuki Tanaka",
+            "yuki.tanaka@northwind-support.example",
+            8,
+            now.AddDays(-600));
+
         yuki.Deactivate();
 
         return
         [
-            new("Alex Turner", "alex.turner@northwind-support.example", 10, now.AddDays(-500)),
-            new("Ben Osei", "ben.osei@northwind-support.example", 8, now.AddDays(-460)),
-            new("Priya Nair", "priya.nair@northwind-support.example", 8, now.AddDays(-400)),
-            new("Sara Lindqvist", "sara.lindqvist@northwind-support.example", 6, now.AddDays(-280)),
-            new("Marcus Doyle", "marcus.doyle@northwind-support.example", 6, now.AddDays(-200)),
+            Create(
+                "Alex Turner",
+                "alex.turner@northwind-support.example",
+                10,
+                now.AddDays(-500)),
+
+            Create(
+                "Ben Osei",
+                "ben.osei@northwind-support.example",
+                8,
+                now.AddDays(-460)),
+
+            Create(
+                "Priya Nair",
+                "priya.nair@northwind-support.example",
+                8,
+                now.AddDays(-400)),
+
+            Create(
+                "Sara Lindqvist",
+                "sara.lindqvist@northwind-support.example",
+                6,
+                now.AddDays(-280)),
+
+            Create(
+                "Marcus Doyle",
+                "marcus.doyle@northwind-support.example",
+                6,
+                now.AddDays(-200)),
+
             yuki
         ];
     }
@@ -90,7 +189,9 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
     /// Alex - General, Technical | Ben - Technical, Outage | Priya - Outage, Security
     /// Sara - General, Billing   | Marcus - Billing, Security | Yuki (inactive) - Technical
     /// </summary>
-    private static void SeedSpecializations(List<Agent> agents, List<Category> categories)
+    private static void SeedSpecializations(
+        List<Agent> agents,
+        List<Category> categories)
     {
         (int Agent, int Category)[] pairs =
         [
@@ -104,7 +205,8 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
 
         foreach (var (agent, category) in pairs)
         {
-            agents[agent - 1].AddSpecialization(categories[category - 1].Id);
+            agents[agent - 1].AddSpecialization(
+                categories[category - 1].Id);
         }
     }
 
@@ -143,11 +245,13 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
             new("TCK-0018", "Annual plan quote request", "Please send a quote for switching to annual billing.", 6, 2, 5, TicketPriority.Low, TicketStatus.New, 600, 2160, null),
             new("TCK-0019", "Audit log export missing entries", "Entries between 02:00 and 04:00 are absent from the export.", 4, 5, 5, TicketPriority.High, TicketStatus.Open, 240, 480, null),
             new("TCK-0020", "Timezone shown incorrectly on reports", "Reports render in UTC instead of our local timezone.", 2, 1, 5, TicketPriority.Medium, TicketStatus.InProgress, 100, 1440, null),
+
             // Open, waiting for an owner.
             new("TCK-0021", "Possible data exposure in shared links", "A shared link appears to be accessible without the password.", 1, 5, null, TicketPriority.Critical, TicketStatus.New, 45, 120, null),
             new("TCK-0022", "Credit note not applied to next invoice", "The credit note from August was never applied.", 4, 2, null, TicketPriority.High, TicketStatus.New, 500, 480, null),
             new("TCK-0023", "Request a walkthrough of the new UI", "Could someone show the team the new navigation?", 5, 1, null, TicketPriority.Medium, TicketStatus.New, 20, 1440, null),
             new("TCK-0024", "Mobile app crashes on cold start", "Happens on Android 14 only, about half the time.", 6, 3, null, TicketPriority.Low, TicketStatus.New, 90, 2160, null),
+
             // Resolved and closed.
             new("TCK-0025", "Search returns stale results", "Newly created items take minutes to appear in search.", 1, 3, 1, TicketPriority.High, TicketStatus.Resolved, 3000, 240, 200),
             new("TCK-0026", "Add a second admin to our workspace", "Please grant admin rights to our new team lead.", 2, 1, 1, TicketPriority.Medium, TicketStatus.Closed, 5000, 1440, 1000),
@@ -182,19 +286,27 @@ public sealed class SupportDbSeeder(SupportDbContext db, IClock clock, ILogger<S
 
             if (row.AgentIndex is not null)
             {
-                ticket.AssignTo(agents[row.AgentIndex.Value - 1].Id, createdAtUtc);
+                ticket.AssignTo(
+                    agents[row.AgentIndex.Value - 1].Id,
+                    createdAtUtc);
             }
 
             if (row.Status != TicketStatus.New)
             {
                 // Resolving or closing stamps the resolution time; open statuses clear it.
-                ticket.ChangeStatus(row.Status, createdAtUtc.AddMinutes(row.ResolvedAfterMinutes ?? 0));
+                ticket.ChangeStatus(
+                    row.Status,
+                    createdAtUtc.AddMinutes(row.ResolvedAfterMinutes ?? 0));
             }
 
             var entry = db.Add(ticket);
+
             entry.Property(t => t.UpdatedAtUtc).CurrentValue =
-                createdAtUtc.AddMinutes(row.ResolvedAfterMinutes ?? row.CreatedMinutesAgo / 2);
-            entry.Property(t => t.DueAtUtc).CurrentValue = createdAtUtc.AddMinutes(row.SlaWindowMinutes);
+                createdAtUtc.AddMinutes(
+                    row.ResolvedAfterMinutes ?? row.CreatedMinutesAgo / 2);
+
+            entry.Property(t => t.DueAtUtc).CurrentValue =
+                createdAtUtc.AddMinutes(row.SlaWindowMinutes);
         }
     }
 

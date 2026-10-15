@@ -1,4 +1,5 @@
 import type { ProblemDetails } from '../types/api';
+import { getAccessToken } from './tokenStore';
 
 /**
  * Where the API lives. In development this stays '/api' and the Vite dev server proxies it
@@ -29,13 +30,25 @@ export class ApiError extends Error {
  * The single place that talks to the API. Returns parsed JSON, or throws an
  * {@link ApiError} that callers can show to the user.
  */
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const token = getAccessToken();
+
+  const headers = new Headers(init?.headers);
+
+  if (init?.body != null && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
   const response = await fetch(`${baseUrl}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -54,6 +67,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   return (await response.json()) as T;
 }
+
+
 
 /** Turns anything thrown by a fetch into a message worth showing a user. */
 export function toErrorMessage(error: unknown, fallback: string): string {

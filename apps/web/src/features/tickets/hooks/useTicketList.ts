@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+
+import { useCallback, useEffect, useState } from 'react';
 import { ApiError } from '../../../api/client';
 import { ticketsApi } from '../../../api/tickets';
 import type {
@@ -32,10 +33,14 @@ interface State {
 
 /** Owns the ticket list's filters and the data they produce. */
 export function useTicketList() {
-  const [filters, setFilters] = useState<TicketFilters>(emptyFilters);
-  const [state, setState] = useState<State>({ isLoading: true });
+  const [filters, setFilters] =
+    useState<TicketFilters>(emptyFilters);
 
-  const load = async () => {
+  const [state, setState] =
+    useState<State>({ isLoading: true });
+
+  // Load tickets using the current filters.
+  const load = useCallback(async () => {
     setState((current) => ({
       ...current,
       isLoading: true,
@@ -62,35 +67,30 @@ export function useTicketList() {
         error: message,
       }));
     }
-  };
+  }, [filters]);
 
+  // Debounce requests when filters change.
   useEffect(() => {
-    const handle = window.setTimeout(load, DEBOUNCE_MS);
+    const handle = window.setTimeout(() => {
+      void load();
+    }, DEBOUNCE_MS);
 
-    return () => window.clearTimeout(handle);
-  }, [
-    filters.search,
-    filters.status,
-    filters.priority,
-    filters.categoryId,
-    filters.customerId,
-    filters.assignedAgentId,
-    filters.unassignedOnly,
-    filters.slaStatus,
-    filters.page,
-    filters.pageSize,
-    filters.sortBy,
-    filters.sortDirection,
-  ]);
+    return () => {
+      window.clearTimeout(handle);
+    };
+  }, [load]);
 
-  const updateFilters = (patch: Partial<TicketFilters>) =>
+  const updateFilters = (patch: Partial<TicketFilters>) => {
     setFilters((current) => ({
       ...current,
       ...patch,
       page: patch.page ?? 1,
     }));
+  };
 
-  const resetFilters = () => setFilters(emptyFilters);
+  const resetFilters = () => {
+    setFilters(emptyFilters);
+  };
 
   return {
     filters,

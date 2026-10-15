@@ -27,5 +27,10 @@ public sealed class AgentConfiguration : IEntityTypeConfiguration<Agent>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Navigation(a => a.Specializations).UsePropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.Property(a => a.PasswordHash).HasMaxLength(500);
+
+
+        
     }
 }

@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+## Local environment and secrets
+.env
+.env.*
+!.env.example
+
+## Local development configuration
+**/appsettings.Development.local.json

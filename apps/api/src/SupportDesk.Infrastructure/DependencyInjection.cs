@@ -16,13 +16,13 @@ namespace SupportDesk.Infrastructure;
 /// </summary>
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(
-        this IServiceCollection services,
-        IConfiguration configuration)
+public static IServiceCollection AddInfrastructure(
+this IServiceCollection services,
+IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("Default")
-            ?? throw new InvalidOperationException(
-                "Connection string 'Default' is missing. See README.md for local setup.");
+    var connectionString = configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException(
+    "Connection string 'Default' is missing. See README.md for local setup.");
 
         services.AddDbContext<SupportDbContext>(options =>
             options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
@@ -43,6 +43,10 @@ public static class DependencyInjection
 
         services.AddScoped<SupportDbSeeder>();
 
+        // Register JWT token service
+        services.AddScoped<IJwtTokenService, JwtTokenService>();
+
         return services;
     }
+
 }

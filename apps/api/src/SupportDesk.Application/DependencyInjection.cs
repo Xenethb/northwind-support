@@ -11,6 +11,10 @@ using SupportDesk.Application.Features.Tickets.Commands.RaiseTicket;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicket;
 using SupportDesk.Application.Features.Tickets.Queries.SearchTickets;
 using SupportDesk.Application.Features.Tickets.Queries.GetTicketEscalations;
+using Microsoft.AspNetCore.Identity;
+using SupportDesk.Domain.Aggregates.Agents;
+using SupportDesk.Application.Features.Auth.Login;
+using SupportDesk.Application.Abstractions;
 
 namespace SupportDesk.Application;
 
@@ -32,9 +36,12 @@ public static class DependencyInjection
         services.AddScoped<GetAgentsQueryHandler>();
         services.AddScoped<GetCategoriesQueryHandler>();
         services.AddScoped<GetTicketEscalationsQueryHandler>();
+        services.AddScoped<IPasswordHasher<Agent>, PasswordHasher<Agent>>();
+        services.AddScoped<LoginCommandHandler>();
 
         services.AddValidatorsFromAssemblyContaining<RaiseTicketCommandHandler>(
             ServiceLifetime.Singleton);
+
 
         return services;
     }

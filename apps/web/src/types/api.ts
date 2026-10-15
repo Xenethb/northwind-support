@@ -118,8 +118,6 @@ export interface CreateTicketResponse {
 
 export interface EscalateTicketPayload {
   reason: string;
-  /** Temporary until Task 3 – will come from the JWT. */
-  escalatedBy: string;
 }
 
 export interface TicketEscalation {
