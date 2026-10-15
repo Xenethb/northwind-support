@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '../../../api/client';
 import { ticketsApi } from '../../../api/tickets';
-import type { PagedResult, TicketFilters, TicketListItem } from '../../../types/api';
+import type {
+  PagedResult,
+  TicketFilters,
+  TicketListItem,
+} from '../../../types/api';
 
 const DEBOUNCE_MS = 300;
 
@@ -13,6 +17,7 @@ export const emptyFilters: TicketFilters = {
   customerId: undefined,
   assignedAgentId: undefined,
   unassignedOnly: false,
+  slaStatus: undefined,
   page: 1,
   pageSize: 20,
   sortBy: 'createdAtUtc',
@@ -31,38 +36,67 @@ export function useTicketList() {
   const [state, setState] = useState<State>({ isLoading: true });
 
   const load = async () => {
-    setState((current) => ({ ...current, isLoading: true, error: undefined }));
+    setState((current) => ({
+      ...current,
+      isLoading: true,
+      error: undefined,
+    }));
 
     try {
       const data = await ticketsApi.getTickets(filters);
-      setState({ isLoading: false, data, error: undefined });
+
+      setState({
+        isLoading: false,
+        data,
+        error: undefined,
+      });
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : 'Unable to load tickets.';
-      setState((current) => ({ ...current, isLoading: false, error: message }));
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : 'Unable to load tickets.';
+
+      setState((current) => ({
+        ...current,
+        isLoading: false,
+        error: message,
+      }));
     }
   };
 
-useEffect(() => {
-  const handle = window.setTimeout(load, DEBOUNCE_MS);
-  return () => window.clearTimeout(handle);
-}, [
-  filters.search,
-  filters.status,
-  filters.priority,
-  filters.categoryId,
-  filters.customerId,
-  filters.assignedAgentId,
-  filters.unassignedOnly,
-  filters.page,
-  filters.pageSize,
-  filters.sortBy,
-  filters.sortDirection,
+  useEffect(() => {
+    const handle = window.setTimeout(load, DEBOUNCE_MS);
+
+    return () => window.clearTimeout(handle);
+  }, [
+    filters.search,
+    filters.status,
+    filters.priority,
+    filters.categoryId,
+    filters.customerId,
+    filters.assignedAgentId,
+    filters.unassignedOnly,
+    filters.slaStatus,
+    filters.page,
+    filters.pageSize,
+    filters.sortBy,
+    filters.sortDirection,
   ]);
 
   const updateFilters = (patch: Partial<TicketFilters>) =>
-    setFilters((current) => ({ ...current, ...patch, page: patch.page ?? 1 }));
+    setFilters((current) => ({
+      ...current,
+      ...patch,
+      page: patch.page ?? 1,
+    }));
 
   const resetFilters = () => setFilters(emptyFilters);
 
-  return { filters, updateFilters, resetFilters, reload: load, ...state };
+  return {
+    filters,
+    updateFilters,
+    resetFilters,
+    reload: load,
+    ...state,
+  };
 }

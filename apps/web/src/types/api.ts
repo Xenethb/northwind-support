@@ -94,6 +94,7 @@ export interface TicketFilters {
   pageSize: number;
   sortBy: TicketSortField;
   sortDirection: SortDirection;
+  slaStatus?: SlaStatus;
 }
 
 export interface CreateTicketPayload {
@@ -102,6 +103,38 @@ export interface CreateTicketPayload {
   customerId: number;
   categoryId: number;
   requestedPriority?: TicketPriority;
+}
+
+export interface TriageResult {
+  priorityReason: string;
+  slaReason: string;
+  assignmentReason: string;
+}
+
+export interface CreateTicketResponse {
+  ticket: TicketDetail;
+  triage: TriageResult;
+}
+
+export interface EscalateTicketPayload {
+  reason: string;
+  /** Temporary until Task 3 – will come from the JWT. */
+  escalatedBy: string;
+}
+
+export interface TicketEscalation {
+  id: number;
+  fromPriority: TicketPriority;
+  toPriority: TicketPriority;
+  fromAgentId: number | null;
+  fromAgentName: string | null;
+  toAgentId: number | null;
+  toAgentName: string | null;
+  fromDueAtUtc: string | null;
+  toDueAtUtc: string | null;
+  reason: string;
+  escalatedBy: string;
+  escalatedAtUtc: string;
 }
 
 export interface Agent {

@@ -5,8 +5,8 @@ import { Field } from '../../../components/Field';
 import type {
   Category,
   CreateTicketPayload,
+  CreateTicketResponse,
   CustomerListItem,
-  TicketDetail,
   TicketPriority,
 } from '../../../types/api';
 
@@ -15,7 +15,7 @@ const priorities: TicketPriority[] = ['Low', 'Medium', 'High', 'Critical'];
 interface CreateTicketFormProps {
   customers: CustomerListItem[];
   categories: Category[];
-  onCreated: (ticket: TicketDetail) => void;
+  onCreated: (response: CreateTicketResponse) => void;
 }
 
 interface FormState {
@@ -35,17 +35,21 @@ const emptyForm: FormState = {
 };
 
 /** Raises a ticket. Validates the same rules as the API before calling it. */
-export function CreateTicketForm({ customers, categories, onCreated }: CreateTicketFormProps) {
+export function CreateTicketForm({
+  customers,
+  categories,
+  onCreated,
+}: CreateTicketFormProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [submitError, setSubmitError] = useState<string>();
 
-  const update = (patch: Partial<FormState>) => setForm((current) => ({ ...current, ...patch }));
+  const update = (patch: Partial<FormState>) =>
+    setForm((current) => ({ ...current, ...patch }));
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
     const validationErrors = validate(form);
     setErrors(validationErrors);
     setSubmitError(undefined);
@@ -59,20 +63,19 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
       description: form.description.trim(),
       customerId: Number(form.customerId),
       categoryId: Number(form.categoryId),
-      requestedPriority: form.requestedPriority === '' ? undefined : form.requestedPriority,
+      requestedPriority:
+        form.requestedPriority === '' ? undefined : form.requestedPriority,
     };
 
     setIsSaving(true);
-
     try {
-      const created = await ticketsApi.createTicket(payload);
+      const response = await ticketsApi.createTicket(payload);
       setForm(emptyForm);
-      onCreated(created);
+      onCreated(response);
     } catch (caught) {
       if (caught instanceof ApiError && Object.keys(caught.fieldErrors).length > 0) {
         setErrors(fromApiErrors(caught.fieldErrors));
       }
-
       setSubmitError(toErrorMessage(caught, 'Could not raise the ticket.'));
     } finally {
       setIsSaving(false);
@@ -156,7 +159,9 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
             {...fieldProps}
             value={form.requestedPriority}
             onChange={(event) =>
-              update({ requestedPriority: event.target.value as TicketPriority | '' })
+              update({
+                requestedPriority: event.target.value as TicketPriority | '',
+              })
             }
           >
             <option value="">No preference</option>
@@ -176,8 +181,12 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
       )}
 
       <div className="button-row">
-        <button type="submit" className="button button--primary" disabled={isSaving}>
-          {isSaving ? 'Raising ticket...' : 'Raise ticket'}
+        <button
+          type="submit"
+          className="button button--primary"
+          disabled={isSaving}
+        >
+          {isSaving ? 'Raising ticket…' : 'Raise ticket'}
         </button>
       </div>
     </form>
@@ -186,28 +195,25 @@ export function CreateTicketForm({ customers, categories, onCreated }: CreateTic
 
 function validate(form: FormState): Record<string, string> {
   const errors: Record<string, string> = {};
-
   if (form.title.trim().length < 5) {
     errors.title = 'Give the ticket a title of at least 5 characters.';
   }
-
   if (form.description.trim().length < 10) {
     errors.description = 'Describe the problem in at least 10 characters.';
   }
-
   if (form.customerId === '') {
     errors.customerId = 'Choose the customer this ticket is for.';
   }
-
   if (form.categoryId === '') {
     errors.categoryId = 'Choose a category.';
   }
-
   return errors;
 }
 
 /** Flattens the API's per-field messages into the one message per field the form shows. */
-function fromApiErrors(fieldErrors: Record<string, string[]>): Record<string, string> {
+function fromApiErrors(
+  fieldErrors: Record<string, string[]>,
+): Record<string, string> {
   return Object.fromEntries(
     Object.entries(fieldErrors).map(([field, messages]) => [
       field.charAt(0).toLowerCase() + field.slice(1),
